@@ -13,10 +13,42 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Arquivos de Origem\cpu">
+      <UniqueIdentifier>{4ecc8aaa-0e21-4030-89c2-d73fde699da9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arquivos de Origem\gfx">
+      <UniqueIdentifier>{7db592f7-a482-41bd-a462-f9cb6783cc6f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arquivos de Origem\sound">
+      <UniqueIdentifier>{c9da9c61-df61-4397-9fd1-ca255211698e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arquivos de Origem\mem">
+      <UniqueIdentifier>{fb67232a-9ebc-4797-bd40-b6f0486564b7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arquivos de Cabeçalho\cpu">
+      <UniqueIdentifier>{31d0e735-2734-4df0-9902-a3ad9d4a2056}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arquivos de Cabeçalho\gfx">
+      <UniqueIdentifier>{4d2190af-bafa-4cf8-9efd-9ca726885c15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arquivos de Cabeçalho\mem">
+      <UniqueIdentifier>{07063d19-1ce1-4a27-8b53-e3aace98c799}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arquivos de Cabeçalho\sound">
+      <UniqueIdentifier>{818e0ee1-cbca-4253-9ec4-230b4a35b384}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ernesto.cpp">
       <Filter>Arquivos de Origem</Filter>
     </ClCompile>
+    <ClCompile Include="mem\ram.cpp">
+      <Filter>Arquivos de Origem\mem</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="headers\mem\ram.h">
+      <Filter>Arquivos de Cabeçalho</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
