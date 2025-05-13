@@ -45,9 +45,15 @@
     <ClCompile Include="mem\ram.cpp">
       <Filter>Arquivos de Origem\mem</Filter>
     </ClCompile>
+    <ClCompile Include="cpu\cpu.cpp">
+      <Filter>Arquivos de Origem</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="headers\mem\ram.h">
+      <Filter>Arquivos de Cabeçalho</Filter>
+    </ClInclude>
+    <ClInclude Include="headers\cpu\cpu.h">
       <Filter>Arquivos de Cabeçalho</Filter>
     </ClInclude>
   </ItemGroup>

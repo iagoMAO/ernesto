@@ -127,10 +127,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="cpu\cpu.cpp" />
     <ClCompile Include="ernesto.cpp" />
     <ClCompile Include="mem\ram.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="headers\cpu\cpu.h" />
     <ClInclude Include="headers\mem\ram.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

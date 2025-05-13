@@ -24,9 +24,9 @@ namespace memory {
         ram[addr] = data;
     }
 
-    void read(uint16_t addr, uint8_t* buffer)
+    uint8_t read(uint16_t addr)
     {
         if (addr >= ram.size()) return;
-        buffer += ram[addr];
+        return ram[addr];
     }
 }
