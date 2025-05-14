@@ -26,7 +26,7 @@ namespace memory {
 
     uint8_t read(uint16_t addr)
     {
-        if (addr >= ram.size()) return;
+        if (addr >= ram.size()) return 0;
         return ram[addr];
     }
 }
