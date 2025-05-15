@@ -612,25 +612,25 @@ void cpu::opcodes::JSR(CPU& c, CPU::addressingMode mode)
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint16_t operand = memory::read(address);
     
-    // TO-DO: implement pushing to stack
-    // c.pushByte(c.PC);
+    c.pushByte(c.PC);
     c.PC = operand;
 }
 
 // RTS - Return from subroutine
 void cpu::opcodes::RTS(CPU& c, CPU::addressingMode mode)
 {
-    // TO-DO: implement pushing to stack
-    // currently useless without stack functionality
-    c.PC += 1;
+    uint16_t low = c.pullByte();
+    uint16_t high = c.pullByte();
+    c.PC = ((high << 8) | low) + 1;
 }
 
 // BRK - Break
 void cpu::opcodes::BRK(CPU& c, CPU::addressingMode mode)
 {
-    // TO-DO: implement pushing to stack
     // push PC + 2 to stack
     // push NV11DIZC flags to stack
+    c.pushByte(c.PC + 1);
+    c.pushByte(c.PS);
     c.PC = 0xFFFE;
     c.setFlag(CPU::I, true);
     c.setFlag(CPU::B, true);
@@ -641,7 +641,11 @@ void cpu::opcodes::RTI(CPU& c, CPU::addressingMode mode)
 {
     // TO-DO: implement pushing to stack
     // currently also useless without stack functionality
-    c.PC = 0xFF;
+    uint8_t ps = c.pullByte();
+    uint16_t low = c.pullByte();
+    uint16_t high = c.pullByte();
+    c.PC = ((high << 8) | low) + 1;
+    c.PS = ps;
 }
 
 // PHA - Push A
