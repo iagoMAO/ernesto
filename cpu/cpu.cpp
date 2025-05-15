@@ -347,6 +347,136 @@ void cpu::opcodes::DEY(CPU& c, CPU::addressingMode mode)
     c.setFlag(CPU::N, result && 0x80);
 }
 
+// ASL - Arithmetic shift left
+void cpu::opcodes::ASL(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = mode == CPU::Accumulator ? c.A : memory::read(address);
+
+    // we carry the last bit of the old value for 8-bit behavior
+    c.setFlag(CPU::C, operand & 0x80);
+
+    uint8_t result = operand << 1;
+
+    if (mode != CPU::Accumulator)
+        memory::write(address, result);
+    else
+        c.A = result;
+
+    // set flags
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// LSR - Logical shift right
+void cpu::opcodes::LSR(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = mode == CPU::Accumulator ? c.A : memory::read(address);
+
+    // we carry the last bit of the old value for 8-bit behavior
+    c.setFlag(CPU::C, operand & 0x01);
+
+    uint8_t result = operand >> 1;
+
+    if (mode != CPU::Accumulator)
+        memory::write(address, result);
+    else
+        c.A = result;
+
+    // set flags
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// ROL - Rotate Left
+void cpu::opcodes::ROL(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = mode == CPU::Accumulator ? c.A : memory::read(address);
+
+    c.setFlag(CPU::C, operand & 0x80);
+
+    uint8_t result = (operand << 1) | (c.getFlag(CPU::C) ? 1 : 0);
+
+    if (mode != CPU::Accumulator)
+        memory::write(address, result);
+    else
+        c.A = result;
+
+    c.setFlag(CPU::C, operand & 0x80);
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result & 0x80);
+}
+
+// ROR - Rotate Right
+void cpu::opcodes::ROR(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = mode == CPU::Accumulator ? c.A : memory::read(address);
+
+    c.setFlag(CPU::C, operand & 0x01);
+
+    uint8_t result = (operand >> 1) | (c.getFlag(CPU::C) ? 0x80 : 0x00);
+
+    if (mode != CPU::Accumulator)
+        memory::write(address, result);
+    else
+        c.A = result;
+
+    c.setFlag(CPU::C, operand & 0x01);
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result & 0x80);
+}
+
+// AND - Bitwise and
+void cpu::opcodes::AND(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.A & operand;
+
+    c.A = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// ORA - Bitwise or
+void cpu::opcodes::ORA(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.A | operand;
+
+    c.A = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// EOR - Bitwise exclusive or
+void cpu::opcodes::EOR(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.A ^ operand;
+
+    c.A = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// BIT - Bit test
+void cpu::opcodes::BIT(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.A & operand;
+
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::V, result && 0x70);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
 uint8_t& cpu::addressing::accumulator(CPU& c)
 {
     // The accumulator register will be the target operand

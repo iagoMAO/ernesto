@@ -49,8 +49,8 @@ int main()
 		cpu::opcodes::DEY(*c, cpu::CPU::Implicit);
 		printf("[ernesto] CPU - X: 0x%02X | Y: 0x%02X\n", c->X, c->Y);
 	}
-	
-	// printf("[ernesto] CPU - A: %x | X: %x | Y: %x | PC: %x | SP: %x | PS: %x", c->A, c->X, c->Y, c->PC, c->SP, c->PS);
+
+	printf("[ernesto] CPU - A: %x | X: %x | Y: %x | PC: %x | SP: %x | PS: %x\n", c->A, c->X, c->Y, c->PC, c->SP, c->PS);
 
     cin.get();
     return 0;
