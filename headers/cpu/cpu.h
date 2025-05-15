@@ -50,6 +50,9 @@ namespace cpu
 			void (*impl)(CPU& cpu); // pointer to implementation
 		};
 
+		void pushByte(uint16_t value);
+		uint16_t pullByte();
+
 		void setFlag(flags flag, bool value);
 		bool getFlag(flags flag) const;
 	};

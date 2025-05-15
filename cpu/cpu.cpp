@@ -477,10 +477,280 @@ void cpu::opcodes::BIT(CPU& c, CPU::addressingMode mode)
     c.setFlag(CPU::N, result && 0x80);
 }
 
+// CMP - Compare A
+void cpu::opcodes::CMP(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.A - operand;
+
+    c.setFlag(CPU::C, (c.A >= operand));
+    c.setFlag(CPU::Z, (c.A == operand));
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// CMP - Compare A
+void cpu::opcodes::CMP(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.A - operand;
+
+    c.setFlag(CPU::C, (c.A >= operand));
+    c.setFlag(CPU::Z, (c.A == operand));
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// CPX - Compare X
+void cpu::opcodes::CPX(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.X - operand;
+
+    c.setFlag(CPU::C, (c.X >= operand));
+    c.setFlag(CPU::Z, (c.X == operand));
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// CPY - Compare Y
+void cpu::opcodes::CPY(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    uint8_t result = c.Y - operand;
+
+    c.setFlag(CPU::C, (c.Y >= operand));
+    c.setFlag(CPU::Z, (c.Y == operand));
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// BCC - Branch if Carry Clear
+void cpu::opcodes::BCC(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (!c.getFlag(CPU::C))
+        c.PC += offset;
+}
+
+// BCS - Branch if Carry Set
+void cpu::opcodes::BCS(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (c.getFlag(CPU::C))
+        c.PC += offset;
+}
+
+// BCC - Branch if Equal
+void cpu::opcodes::BEQ(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (c.getFlag(CPU::Z))
+        c.PC += offset;
+}
+
+// BNE - Branch if Not Equal
+void cpu::opcodes::BNE(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (!c.getFlag(CPU::Z))
+        c.PC += offset;
+}
+
+// BPL - Branch if Plus
+void cpu::opcodes::BPL(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (!c.getFlag(CPU::N))
+        c.PC += offset;
+}
+
+// BMI - Branch if Minus
+void cpu::opcodes::BMI(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (c.getFlag(CPU::N))
+        c.PC += offset;
+}
+
+// BVC - Branch if Overflow Clear
+void cpu::opcodes::BVC(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (!c.getFlag(CPU::V))
+        c.PC += offset;
+}
+
+// BVS - Branch if Overflow Set
+void cpu::opcodes::BVS(CPU& c, CPU::addressingMode mode)
+{
+    int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
+
+    if (c.getFlag(CPU::V))
+        c.PC += offset;
+}
+
+// JMP - Jump!
+void cpu::opcodes::JMP(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint16_t operand = memory::read(address);
+
+    c.PC = operand;
+}
+
+// JSR - Jump to subroutine
+void cpu::opcodes::JSR(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint16_t operand = memory::read(address);
+    
+    // TO-DO: implement pushing to stack
+    // c.pushByte(c.PC);
+    c.PC = operand;
+}
+
+// RTS - Return from subroutine
+void cpu::opcodes::RTS(CPU& c, CPU::addressingMode mode)
+{
+    // TO-DO: implement pushing to stack
+    // currently useless without stack functionality
+    c.PC += 1;
+}
+
+// BRK - Break
+void cpu::opcodes::BRK(CPU& c, CPU::addressingMode mode)
+{
+    // TO-DO: implement pushing to stack
+    // push PC + 2 to stack
+    // push NV11DIZC flags to stack
+    c.PC = 0xFFFE;
+    c.setFlag(CPU::I, true);
+    c.setFlag(CPU::B, true);
+}
+
+// RTI - Return from Interrupt
+void cpu::opcodes::RTI(CPU& c, CPU::addressingMode mode)
+{
+    // TO-DO: implement pushing to stack
+    // currently also useless without stack functionality
+    c.PC = 0xFF;
+}
+
+// PHA - Push A
+void cpu::opcodes::PHA(CPU& c, CPU::addressingMode mode)
+{
+    c.pushByte(c.A);
+}
+
+// PLA - Pull A
+void cpu::opcodes::PLA(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t result = c.pullByte();
+    c.A = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result & 0x80);
+}
+
+// PHP - Push processor status
+void cpu::opcodes::PHP(CPU& c, CPU::addressingMode mode)
+{
+    c.pushByte(c.PS);
+}
+
+// PLP - Pull processor status
+void cpu::opcodes::PLP(CPU& c, CPU::addressingMode mode)
+{
+    uint8_t ps = c.pullByte();
+    c.PS = ps;
+}
+
+// TXS - Transfer X to Stack Pointer
+void cpu::opcodes::TXS(CPU& c, CPU::addressingMode mode)
+{
+    c.SP = c.X;
+}
+
+// TSX - Transfer Stack Pointer to X
+void cpu::opcodes::TSX(CPU& c, CPU::addressingMode mode)
+{
+    c.X = c.SP;
+    c.setFlag(CPU::Z, c.X == 0);
+    c.setFlag(CPU::N, c.X & 0x80);
+}
+
+// CLC - Clear Carry
+void cpu::opcodes::CLC(CPU& c, CPU::addressingMode mode)
+{
+    c.setFlag(CPU::C, 0);
+}
+
+// CLD - Clear Decimal
+void cpu::opcodes::CLD(CPU& c, CPU::addressingMode mode)
+{
+    c.setFlag(CPU::D, 0);
+}
+
+// CLI - Clear Interrupt
+void cpu::opcodes::CLI(CPU& c, CPU::addressingMode mode)
+{
+    c.setFlag(CPU::I, 0);
+}
+
+// CLV - Clear Overflow
+void cpu::opcodes::CLV(CPU& c, CPU::addressingMode mode)
+{
+    c.setFlag(CPU::V, 0);
+}
+
+// SEC - Set Carry
+void cpu::opcodes::SEC(CPU& c, CPU::addressingMode mode)
+{
+    c.setFlag(CPU::C, 1);
+}
+
+// SED - Set Decimal
+void cpu::opcodes::SED(CPU& c, CPU::addressingMode mode)
+{
+    c.setFlag(CPU::D, 1);
+}
+
+// SEI - Set Interrupt
+void cpu::opcodes::SEI(CPU& c, CPU::addressingMode mode)
+{
+    c.setFlag(CPU::I, 1);
+}
+
+// NOP - No operation
+void cpu::opcodes::NOP(CPU& c, CPU::addressingMode mode)
+{
+    // Literally nothing
+}
+
 uint8_t& cpu::addressing::accumulator(CPU& c)
 {
     // The accumulator register will be the target operand
     return c.A;
+}
+
+void CPU::pushByte(uint16_t value)
+{
+    // Stack begins at 0x0100
+    SP--;
+    memory::write(0x0100 + SP, A);
+}
+
+uint16_t CPU::pullByte()
+{
+    SP++;
+    return memory::read(0x0100 + SP);
 }
 
 void CPU::setFlag(flags flag, bool value)
