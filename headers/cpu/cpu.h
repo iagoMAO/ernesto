@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+
 namespace cpu
 {
 	struct CPU
@@ -37,7 +38,8 @@ namespace cpu
 			AbsoluteY,
 			Indirect,
 			IdxIndirect,
-			IndirectIdx
+			IndirectIdx,
+			Implicit
 		};
 
 		struct instruction
@@ -68,7 +70,7 @@ namespace cpu
 		uint8_t& accumulator(CPU& c);
 		void implied(CPU& c);
 
-		uint16_t cpu::addressing::resolve(CPU& c, CPU::addressingMode mode);
+		uint16_t resolve(CPU& c, CPU::addressingMode mode);
 	}
 
 	namespace opcodes
@@ -153,5 +155,5 @@ namespace cpu
 	}
 
 	void populate();
-	void initialize();
+	CPU* initialize();
 }

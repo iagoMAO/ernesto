@@ -295,14 +295,13 @@ void cpu::opcodes::INC(CPU& c, CPU::addressingMode mode)
 void cpu::opcodes::INX(CPU& c, CPU::addressingMode mode)
 {
     // x = x + 1
-    uint8_t result = c.X += 1;
-    c.X = result;
-    c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.X += 1;
+    c.setFlag(CPU::Z, c.X == 0);
+    c.setFlag(CPU::N, c.X && 0x80);
 }
 
 // INY - Increment Y
-void cpu::opcodes::INX(CPU& c, CPU::addressingMode mode)
+void cpu::opcodes::INY(CPU& c, CPU::addressingMode mode)
 {
     // y = y + 1
     uint8_t result = c.Y += 1;
@@ -374,7 +373,10 @@ void cpu::populate()
     // populate instructions
 }
 
-void cpu::initialize()
+CPU* cpu::initialize()
 {
+    CPU* c = new CPU();
     cpu::populate();
+
+    return c;
 }
