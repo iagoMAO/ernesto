@@ -10,7 +10,7 @@
 
 using namespace cpu;
 
-instruction instructions[256];
+cpu::CPU::instruction instructions[256];
 
 uint8_t A = 0; // Accumulator
 uint8_t X = 0; // Index register X
@@ -118,6 +118,234 @@ int16_t cpu::addressing::relative(CPU& c)
 void cpu::addressing::implied(CPU& c)
 {
     // no operand (?)
+}
+
+uint16_t cpu::addressing::resolve(CPU& c, CPU::addressingMode mode)
+{
+    switch (mode)
+    {
+    case CPU::Absolute:
+        return cpu::addressing::absolute(c);
+    case CPU::AbsoluteX:
+        return cpu::addressing::absoluteX(c);
+    case CPU::AbsoluteY:
+        return cpu::addressing::absoluteY(c);
+    case CPU::Accumulator:
+        return cpu::addressing::accumulator(c);
+    case CPU::IdxIndirect:
+        return cpu::addressing::indirectX(c);
+    case CPU::IndirectIdx:
+        return cpu::addressing::indirectY(c);
+    case CPU::Indirect:
+        return cpu::addressing::indirect(c);
+    case CPU::Immediate:
+        return cpu::addressing::immediate(c);
+    case CPU::Relative:
+        return cpu::addressing::relative(c);
+    case CPU::ZeroPage:
+        return cpu::addressing::zeroPage(c);
+    case CPU::ZeroPageX:
+        return cpu::addressing::zeroPageX(c);
+    case CPU::ZeroPageY:
+        return cpu::addressing::zeroPageY(c);
+    }
+}
+
+// LDA - loads the content of operand into the accumulator register
+void cpu::opcodes::LDA(CPU& c, CPU::addressingMode mode)
+{
+    // bear in mind: all addressing modes return unsigned integers except for relative mode
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    c.A = operand;
+    c.setFlag(CPU::Z, (operand == 0));
+    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+}
+
+// STA - stores the content of the accumulator register into memory
+void cpu::opcodes::STA(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    memory::write(address, c.A);
+}
+
+// LDX - loads the content of operand into the X register
+void cpu::opcodes::LDX(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    c.X = operand;
+    c.setFlag(CPU::Z, (operand == 0));
+    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+}
+
+// STX - stores the content of the X register into memory
+void cpu::opcodes::STX(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    memory::write(address, c.X);
+}
+
+// LDY - loads the content of operand into the Y register
+void cpu::opcodes::LDY(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    c.Y = operand;
+    c.setFlag(CPU::Z, (operand == 0));
+    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+}
+
+// STY - stores the content of the Y register into memory
+void cpu::opcodes::STY(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    memory::write(address, c.Y);
+}
+
+// TAX - transfers X to A
+void cpu::opcodes::TAX(CPU& c, CPU::addressingMode mode)
+{
+    // The addressing mode here is implied, hence no need for resolving
+    c.X = c.A;
+    c.setFlag(CPU::Z, (c.X == 0));
+    c.setFlag(CPU::N, (c.X && 0x80)); // check last bit for sign
+}
+
+// TXA - transfers A to X
+void cpu::opcodes::TXA(CPU& c, CPU::addressingMode mode)
+{
+    // The addressing mode here is implied, hence no need for resolving
+    c.A = c.X;
+    c.setFlag(CPU::Z, (c.A == 0));
+    c.setFlag(CPU::N, (c.A && 0x80)); // check last bit for sign
+}
+
+// TAY - transfers Y to A
+void cpu::opcodes::TAY(CPU& c, CPU::addressingMode mode)
+{
+    // The addressing mode here is implied, hence no need for resolving
+    c.Y = c.A;
+    c.setFlag(CPU::Z, (c.Y == 0));
+    c.setFlag(CPU::N, (c.Y && 0x80)); // check last bit for sign
+}
+
+// TYA - transfers A to Y
+void cpu::opcodes::TYA(CPU& c, CPU::addressingMode mode)
+{
+    // The addressing mode here is implied, hence no need for resolving
+    c.A = c.Y;
+    c.setFlag(CPU::Z, (c.A == 0));
+    c.setFlag(CPU::N, (c.A && 0x80)); // check last bit for sign
+}
+
+// ADC - Add with Carry
+void cpu::opcodes::ADC(CPU& c, CPU::addressingMode mode)
+{
+    // A = A + memory + C
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    uint8_t result = (c.A + memory::read(operand) + (c.C ? 1 : 0));
+    c.A = result;
+
+    c.setFlag(CPU::C, (result > 0xFF));
+    c.setFlag(CPU::Z, (result == 0));
+    c.setFlag(CPU::V, ((result ^ c.A) & (result ^ operand)) & 0x80); // check for signed overflow
+    c.setFlag(CPU::N, (result && 0x80)); // if negative
+}
+
+// SBC - Subtract with Carry
+void cpu::opcodes::SBC(CPU& c, CPU::addressingMode mode)
+{
+    // A = A - memory - ~C
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    uint8_t result = (c.A - memory::read(operand) - ~(c.C ? 1 : 0));
+    c.A = result;
+
+    c.setFlag(CPU::C, !(result < 0x00));
+    c.setFlag(CPU::Z, (result == 0));
+    c.setFlag(CPU::V, ((result ^ c.A) & (result ^ ~operand)) & 0x80); // check for signed overflow
+    c.setFlag(CPU::N, (result && 0x80)); // if negative
+}
+
+// INC - Increment memory
+void cpu::opcodes::INC(CPU& c, CPU::addressingMode mode)
+{
+    // memory = memory + 1
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+    
+    // write the original value first
+    memory::write(address, operand);
+
+    // now we increment
+    memory::write(address, operand + 1);
+
+    c.setFlag(CPU::Z, (operand + 1) == 0);
+    c.setFlag(CPU::N, (operand + 1) && 0x80);
+}
+
+// INX - Increment X
+void cpu::opcodes::INX(CPU& c, CPU::addressingMode mode)
+{
+    // x = x + 1
+    uint8_t result = c.X += 1;
+    c.X = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// INY - Increment Y
+void cpu::opcodes::INX(CPU& c, CPU::addressingMode mode)
+{
+    // y = y + 1
+    uint8_t result = c.Y += 1;
+    c.Y = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// DEC - Decrement memory
+void cpu::opcodes::DEC(CPU& c, CPU::addressingMode mode)
+{
+    // memory = memory - 1
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    // write the original value first
+    memory::write(address, operand);
+
+    // now we increment
+    memory::write(address, operand - 1);
+
+    c.setFlag(CPU::Z, (operand - 1) == 0);
+    c.setFlag(CPU::N, (operand - 1) && 0x80);
+}
+
+// DEX - Decrement X
+void cpu::opcodes::DEX(CPU& c, CPU::addressingMode mode)
+{
+    // x = x + 1
+    uint8_t result = c.X -= 1;
+    c.X = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
+}
+
+// DEY - Decrement Y
+void cpu::opcodes::DEY(CPU& c, CPU::addressingMode mode)
+{
+    // y = y + 1
+    uint8_t result = c.Y -= 1;
+    c.Y = result;
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result && 0x80);
 }
 
 uint8_t& cpu::addressing::accumulator(CPU& c)
