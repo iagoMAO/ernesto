@@ -5,52 +5,44 @@
 
 #include <iostream>
 #include "headers/mem/ram.h"
-#include "headers/cpu//cpu.h"
+#include "headers/cpu/cpu.h"
+#include "headers/rom/rom.h"
 
 int main()
 {
     std::cout << "[ernesto] - welcome\n";
+
+    memory::initialize();
+
+    std::cout << "[ernesto] - RAM ok\n";
+
+    // load a ROM into memory
+    rom::testLoad();
     
-	// Initialize ram & cpu
-	memory::initialize();
-	cpu::CPU* c = cpu::initialize();
+    std::cout << "[ernesto] - nestest.nes loaded\n";
 
-	printf("[ernesto] - RAM ok\n");
-	printf("[ernesto] - CPU ok\n");
+    cpu::CPU* c = cpu::initialize();
+    c->PC = 0xC000;
 
-	// Fill up memory with 0x01
-	for (int i = 0; i < memory::ram.size(); i++)
-	{
-		memory::write((uint16_t)i, 0x00);
-	}
+    for (;;)
+    {
+        uint8_t opcode = memory::read(c->PC);
+        const cpu::CPU::instruction& instr = c->instructions[opcode];
 
-	printf("[ernesto] - RAM filled\n");
+        printf("\n[ernesto] - [PC: %04X] opcode: %02X (%s) - A: %#04x | X: %#04x | Y: %#04x | SP: %#04x | P: %#08x", c->PC, opcode, instr.name.c_str(), c->A, c->X, c->Y, c->SP, c->PS);
 
-	// Test instructions
-	c->A = 0xAA;
-	c->X = 0x01;
-	c->Y = 0x0A;
-	c->PC = 0x00; // STA opcode
-
-	printf("[ernesto] - Test INC instructions\n");
-
-	for (int i = 0; i < 16; i++)
-	{
-		cpu::opcodes::INX(*c, cpu::CPU::Implicit);
-		cpu::opcodes::INY(*c, cpu::CPU::Implicit);
-		printf("[ernesto] CPU - X: 0x%02X | Y: 0x%02X\n", c->X, c->Y);
-	}
-
-	printf("[ernesto] - Test DEC instructions\n");
-
-	for (int i = 0; i < 16; i++)
-	{
-		cpu::opcodes::DEX(*c, cpu::CPU::Implicit);
-		cpu::opcodes::DEY(*c, cpu::CPU::Implicit);
-		printf("[ernesto] CPU - X: 0x%02X | Y: 0x%02X\n", c->X, c->Y);
-	}
-
-	printf("[ernesto] CPU - A: %x | X: %x | Y: %x | PC: %x | SP: %x | PS: %x\n", c->A, c->X, c->Y, c->PC, c->SP, c->PS);
+        if (instr.impl)
+        {
+            instr.impl(*c, instr.mode);
+            if (!instr.incrementPc)
+                c->PC += instr.size;
+        }
+        else
+        {
+            printf("\n[ernesto] - unimplemented opcode: %x", (int)opcode);
+            break;
+        }
+    };
 
     cin.get();
     return 0;

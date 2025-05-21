@@ -45,16 +45,22 @@ namespace cpu
 		struct instruction
 		{
 			std::string name; // name of instruction
+			addressingMode mode; // addressing mode
 			uint8_t size; // size of instruction
 			uint8_t cycles; // cycles needed for runtime
-			void (*impl)(CPU& cpu); // pointer to implementation
+			bool incrementPc; // some opcodes already alter PC
+			void (*impl)(CPU& cpu, addressingMode mode); // pointer to implementation
 		};
+
+		instruction instructions[256];
 
 		void pushByte(uint16_t value);
 		uint16_t pullByte();
 
 		void setFlag(flags flag, bool value);
 		bool getFlag(flags flag) const;
+
+		void populate();
 	};
 
 	namespace addressing

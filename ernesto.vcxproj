@@ -130,10 +130,12 @@
     <ClCompile Include="cpu\cpu.cpp" />
     <ClCompile Include="ernesto.cpp" />
     <ClCompile Include="mem\ram.cpp" />
+    <ClCompile Include="rom\rom.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="headers\cpu\cpu.h" />
     <ClInclude Include="headers\mem\ram.h" />
+    <ClInclude Include="headers\rom\rom.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

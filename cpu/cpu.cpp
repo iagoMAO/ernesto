@@ -2,7 +2,7 @@
     ernesto - 6502, ergo NES emulator
     author: Iago Maldonado (@iagoMAO)
 
-    cpu.cpp - handle CPU, opcodes etc
+    cpu.cpp - handle CPU, false, opcodes etc
 */
 
 #include "../headers/cpu/cpu.h"
@@ -22,33 +22,34 @@ uint16_t PC = 0; // Program Counter
 // Handle different addressing modes
 uint16_t cpu::addressing::immediate(CPU& c)
 {
-    return c.PC++;
+    return c.PC + 1;
 }
 
 uint16_t cpu::addressing::zeroPage(CPU& c)
 {
     // Access an address in zero page
-    return memory::read(c.PC++);
+    return memory::read(c.PC + 1);
 }
 
 uint16_t cpu::addressing::zeroPageX(CPU& c)
 {
     // Access an address + the offset stored in the X register in zero page
-    return memory::read(memory::read(c.PC++) + c.X) & 0xFF;
+    uint8_t addr = memory::read(c.PC + 1);
+    return (addr + c.X) & 0xFF;
 }
 
 uint16_t cpu::addressing::zeroPageY(CPU& c)
 {
     // Access an address + the offset stored in the Y register in zero page
-    uint8_t addr = memory::read(c.PC++);
-    return memory::read(memory::read(c.PC++) + c.Y) & 0xFF;
+    uint8_t addr = memory::read(c.PC + 1);
+    return (addr + c.Y) & 0xFF;
 }
 
 uint16_t cpu::addressing::absolute(CPU& c)
 {
     // Absolute addressing mode uses 16-bit addresses, hence why we need to read two bytes
-    uint8_t low = memory::read(c.PC++);
-    uint8_t high = memory::read(c.PC++);
+    uint8_t low = memory::read(c.PC + 1);
+    uint8_t high = memory::read(c.PC + 2);
 
     // Shift the high byte 8 bits to the left, making space for the 8 bits of the lower byte
     return (high << 8) | low;
@@ -57,8 +58,8 @@ uint16_t cpu::addressing::absolute(CPU& c)
 uint16_t cpu::addressing::absoluteX(CPU& c)
 {
     // Same as normal absolute, however the address gets offset by the value in the X register 
-    uint8_t low = memory::read(c.PC++);
-    uint8_t high = memory::read(c.PC++);
+    uint8_t low = memory::read(c.PC + 1);
+    uint8_t high = memory::read(c.PC + 2);
 
     return ((high << 8) | low) + c.X;
 }
@@ -66,8 +67,8 @@ uint16_t cpu::addressing::absoluteX(CPU& c)
 uint16_t cpu::addressing::absoluteY(CPU& c)
 {
     // Same as normal absolute, however the address gets offset by the value in the Y register
-    uint8_t low = memory::read(c.PC++);
-    uint8_t high = memory::read(c.PC++);
+    uint8_t low = memory::read(c.PC + 1);
+    uint8_t high = memory::read(c.PC + 2);
 
     return ((high << 8) | low) + c.Y;
 }
@@ -75,8 +76,8 @@ uint16_t cpu::addressing::absoluteY(CPU& c)
 uint16_t cpu::addressing::indirect(CPU& c)
 {
     // this is only used by JMP, pretty similar to absolute addressing mode but targetting a pointer instead
-    uint8_t low = memory::read(c.PC++);
-    uint8_t high = memory::read(c.PC++);
+    uint8_t low = memory::read(c.PC + 1);
+    uint8_t high = memory::read(c.PC + 2);
 
     uint8_t ptr = (high << 8 | low);
 
@@ -90,7 +91,7 @@ uint16_t cpu::addressing::indirect(CPU& c)
 uint16_t cpu::addressing::indirectX(CPU& c)
 {
     // target is pointer in zero page, offset by X
-    uint16_t base = (memory::read(c.PC++) + c.X) & 0xFF;
+    uint16_t base = (memory::read(c.PC + 1) + c.X) & 0xFF;
     uint8_t low = memory::read(base);
     uint8_t high = memory::read(base + 1) & 0xFF;
 
@@ -100,7 +101,7 @@ uint16_t cpu::addressing::indirectX(CPU& c)
 uint16_t cpu::addressing::indirectY(CPU& c)
 {
     // target is pointer in zero page, offset by Y
-    uint16_t base = (memory::read(c.PC++) + c.Y) & 0xFF;
+    uint16_t base = (memory::read(c.PC + 1) + c.Y) & 0xFF;
     uint8_t low = memory::read(base);
     uint8_t high = memory::read(base + 1) & 0xFF;
 
@@ -111,8 +112,7 @@ int16_t cpu::addressing::relative(CPU& c)
 {
     // mainly used for branches
     // 8 bit SIGNED offset
-    int8_t offset = memory::read(c.PC++);
-    return static_cast<int16_t>(c.PC + offset);
+    return static_cast<int8_t>(memory::read(c.PC + 1));
 }
 
 void cpu::addressing::implied(CPU& c)
@@ -148,6 +148,8 @@ uint16_t cpu::addressing::resolve(CPU& c, CPU::addressingMode mode)
         return cpu::addressing::zeroPageX(c);
     case CPU::ZeroPageY:
         return cpu::addressing::zeroPageY(c);
+    default:
+        return 0; // ?
     }
 }
 
@@ -489,18 +491,6 @@ void cpu::opcodes::CMP(CPU& c, CPU::addressingMode mode)
     c.setFlag(CPU::N, result && 0x80);
 }
 
-// CMP - Compare A
-void cpu::opcodes::CMP(CPU& c, CPU::addressingMode mode)
-{
-    uint16_t address = cpu::addressing::resolve(c, mode);
-    uint8_t operand = memory::read(address);
-    uint8_t result = c.A - operand;
-
-    c.setFlag(CPU::C, (c.A >= operand));
-    c.setFlag(CPU::Z, (c.A == operand));
-    c.setFlag(CPU::N, result && 0x80);
-}
-
 // CPX - Compare X
 void cpu::opcodes::CPX(CPU& c, CPU::addressingMode mode)
 {
@@ -530,8 +520,12 @@ void cpu::opcodes::BCC(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (!c.getFlag(CPU::C))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // BCS - Branch if Carry Set
@@ -539,8 +533,12 @@ void cpu::opcodes::BCS(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (c.getFlag(CPU::C))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // BCC - Branch if Equal
@@ -548,8 +546,12 @@ void cpu::opcodes::BEQ(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (c.getFlag(CPU::Z))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // BNE - Branch if Not Equal
@@ -557,8 +559,12 @@ void cpu::opcodes::BNE(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (!c.getFlag(CPU::Z))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // BPL - Branch if Plus
@@ -566,8 +572,12 @@ void cpu::opcodes::BPL(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (!c.getFlag(CPU::N))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // BMI - Branch if Minus
@@ -575,8 +585,12 @@ void cpu::opcodes::BMI(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (c.getFlag(CPU::N))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // BVC - Branch if Overflow Clear
@@ -584,8 +598,12 @@ void cpu::opcodes::BVC(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (!c.getFlag(CPU::V))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // BVS - Branch if Overflow Set
@@ -593,8 +611,12 @@ void cpu::opcodes::BVS(CPU& c, CPU::addressingMode mode)
 {
     int8_t offset = static_cast<int8_t>(cpu::addressing::resolve(c, mode));
 
+    uint16_t next = c.PC + 2;
+
     if (c.getFlag(CPU::V))
-        c.PC += offset;
+        c.PC = next + offset;
+    else
+        c.PC = next;
 }
 
 // JMP - Jump!
@@ -603,7 +625,7 @@ void cpu::opcodes::JMP(CPU& c, CPU::addressingMode mode)
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint16_t operand = memory::read(address);
 
-    c.PC = operand;
+    c.PC = (mode == CPU::Absolute ? address : operand);
 }
 
 // JSR - Jump to subroutine
@@ -611,9 +633,11 @@ void cpu::opcodes::JSR(CPU& c, CPU::addressingMode mode)
 {
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint16_t operand = memory::read(address);
-    
-    c.pushByte(c.PC);
-    c.PC = operand;
+    uint16_t returnAddr = c.PC + 2;
+    c.pushByte((returnAddr >> 8) & 0xFF);
+    c.pushByte(returnAddr & 0xFF);
+
+    c.PC = (mode == CPU::Absolute ? address : operand);
 }
 
 // RTS - Return from subroutine
@@ -747,8 +771,8 @@ uint8_t& cpu::addressing::accumulator(CPU& c)
 void CPU::pushByte(uint16_t value)
 {
     // Stack begins at 0x0100
+    memory::write(0x0100 + SP, value);
     SP--;
-    memory::write(0x0100 + SP, A);
 }
 
 uint16_t CPU::pullByte()
@@ -772,15 +796,199 @@ bool CPU::getFlag(flags flag) const
     return PS & flag;
 }
 
-void cpu::populate()
+void CPU::populate()
 {
     // populate instructions
+    cpu::CPU::instructions[0x69] = { "ADC", Immediate, 2, 2, false, opcodes::ADC };
+    cpu::CPU::instructions[0x65] = { "ADC", ZeroPage, 2, 3, false, opcodes::ADC };
+    cpu::CPU::instructions[0x75] = { "ADC", ZeroPageX, 2, 4, false, opcodes::ADC };
+    cpu::CPU::instructions[0x6D] = { "ADC", Absolute, 3, 4, false, opcodes::ADC };
+    cpu::CPU::instructions[0x7D] = { "ADC", AbsoluteX, 3, 4, false, opcodes::ADC };
+    cpu::CPU::instructions[0x79] = { "ADC", AbsoluteY, 3, 4, false, opcodes::ADC };
+    cpu::CPU::instructions[0x61] = { "ADC", IdxIndirect, 2, 6, false, opcodes::ADC };
+    cpu::CPU::instructions[0x71] = { "ADC", IndirectIdx, 2, 5, false, opcodes::ADC };
+
+    cpu::CPU::instructions[0x29] = { "AND", Immediate, 2, 2, false, opcodes::AND };
+    cpu::CPU::instructions[0x25] = { "AND", ZeroPage, 2, 3, false, opcodes::AND };
+    cpu::CPU::instructions[0x35] = { "AND", ZeroPageX, 2, 4, false, opcodes::AND };
+    cpu::CPU::instructions[0x2D] = { "AND", Absolute, 3, 4, false, opcodes::AND };
+    cpu::CPU::instructions[0x3D] = { "AND", AbsoluteX, 3, 4, false, opcodes::AND };
+    cpu::CPU::instructions[0x39] = { "AND", AbsoluteY, 3, 4, false, opcodes::AND };
+    cpu::CPU::instructions[0x21] = { "AND", IdxIndirect, 2, 6, false, opcodes::AND };
+    cpu::CPU::instructions[0x31] = { "AND", IndirectIdx, 2, 5, false, opcodes::AND };
+
+    cpu::CPU::instructions[0x0A] = { "ASL", Accumulator, 1, 2, false, opcodes::ASL };
+    cpu::CPU::instructions[0x06] = { "ASL", ZeroPage, 2, 5, false, opcodes::ASL };
+    cpu::CPU::instructions[0x16] = { "ASL", ZeroPageX, 2, 6, false, opcodes::ASL };
+    cpu::CPU::instructions[0x0E] = { "ASL", Absolute, 3, 6, false, opcodes::ASL };
+    cpu::CPU::instructions[0x1E] = { "ASL", AbsoluteX, 3, 7, false, opcodes::ASL };
+
+    cpu::CPU::instructions[0x90] = { "BCC", Relative, 2, 1, true, opcodes::BCC };
+    cpu::CPU::instructions[0xB0] = { "BCS", Relative, 2, 1, true, opcodes::BCS };
+    cpu::CPU::instructions[0xF0] = { "BEQ", Relative, 2, 1, true, opcodes::BEQ };
+    cpu::CPU::instructions[0x30] = { "BMI", Relative, 2, 1, true, opcodes::BMI };
+    cpu::CPU::instructions[0xD0] = { "BNE", Relative, 2, 1, true, opcodes::BNE };
+    cpu::CPU::instructions[0x10] = { "BPL", Relative, 2, 1, true, opcodes::BPL };
+    cpu::CPU::instructions[0x50] = { "BVC", Relative, 2, 1, true, opcodes::BVC };
+    cpu::CPU::instructions[0x70] = { "BVS", Relative, 2, 1, true, opcodes::BVS };
+
+    cpu::CPU::instructions[0x00] = { "BRK", Implicit, 1, 7, false, opcodes::BRK };
+    cpu::CPU::instructions[0x00] = { "BRK", Immediate, 1, 7, false, opcodes::BRK };
+
+    cpu::CPU::instructions[0x18] = { "CLC", Implicit, 1, 2, false, opcodes::CLC };
+    cpu::CPU::instructions[0xD8] = { "CLD", Implicit, 1, 2, false, opcodes::CLD };
+    cpu::CPU::instructions[0x58] = { "CLI", Implicit, 1, 2, false, opcodes::CLI };
+    cpu::CPU::instructions[0xB8] = { "CLV", Implicit, 1, 2, false, opcodes::CLV };
+
+    cpu::CPU::instructions[0x24] = { "BIT", ZeroPage, 2, 3, false, opcodes::BIT };
+    cpu::CPU::instructions[0x2C] = { "BIT", Absolute, 3, 4, false, opcodes::BIT };
+
+    cpu::CPU::instructions[0xC9] = { "CMP", Immediate, 2, 2, false, opcodes::CMP };
+    cpu::CPU::instructions[0xC5] = { "CMP", ZeroPage, 2, 3, false, opcodes::CMP };
+    cpu::CPU::instructions[0xD5] = { "CMP", ZeroPageX, 2, 4, false, opcodes::CMP };
+    cpu::CPU::instructions[0xCD] = { "CMP", Absolute, 3, 4, false, opcodes::CMP };
+    cpu::CPU::instructions[0xDD] = { "CMP", AbsoluteX, 3, 4, false, opcodes::CMP };
+    cpu::CPU::instructions[0xD9] = { "CMP", AbsoluteY, 3, 4, false, opcodes::CMP };
+    cpu::CPU::instructions[0xC1] = { "CMP", IdxIndirect, 2, 6, false, opcodes::CMP };
+    cpu::CPU::instructions[0xD1] = { "CMP", IndirectIdx, 2, 5, false, opcodes::CMP };
+
+    cpu::CPU::instructions[0xE0] = { "CPX", Immediate, 2, 2, false, opcodes::CPX };
+    cpu::CPU::instructions[0xE4] = { "CPX", ZeroPage, 2, 3, false, opcodes::CPX };
+    cpu::CPU::instructions[0xEC] = { "CPX", Absolute, 3, 4, false, opcodes::CPX };
+
+    cpu::CPU::instructions[0xC0] = { "CPY", Immediate, 2, 2, false, opcodes::CPY };
+    cpu::CPU::instructions[0xC4] = { "CPY", ZeroPage, 2, 3, false, opcodes::CPY };
+    cpu::CPU::instructions[0xCC] = { "CPY", Absolute, 3, 4, false, opcodes::CPY };
+
+    cpu::CPU::instructions[0xC6] = { "DEC", ZeroPage, 2, 5, false, opcodes::DEC };
+    cpu::CPU::instructions[0xD6] = { "DEC", ZeroPageX, 2, 6, false, opcodes::DEC };
+    cpu::CPU::instructions[0xCE] = { "DEC", Absolute, 3, 6, false, opcodes::DEC };
+    cpu::CPU::instructions[0xDE] = { "DEC", AbsoluteX, 3, 7, false, opcodes::DEC };
+
+    cpu::CPU::instructions[0xCA] = { "DEX", Implicit, 1, 2, false, opcodes::DEX };
+    cpu::CPU::instructions[0x88] = { "DEY", Implicit, 1, 2, false, opcodes::DEY };
+
+    cpu::CPU::instructions[0xE6] = { "INC", ZeroPage, 2, 5, false, opcodes::INC };
+    cpu::CPU::instructions[0xF6] = { "INC", ZeroPageX, 2, 6, false, opcodes::INC };
+    cpu::CPU::instructions[0xEE] = { "INC", Absolute, 3, 6, false, opcodes::INC };
+    cpu::CPU::instructions[0xFE] = { "INC", AbsoluteX, 3, 7, false, opcodes::INC };
+
+    cpu::CPU::instructions[0xE8] = { "INX", Implicit, 1, 2, false, opcodes::INX };
+    cpu::CPU::instructions[0xC8] = { "INY", Implicit, 1, 2, false, opcodes::INY };
+
+    cpu::CPU::instructions[0x49] = { "EOR", Immediate, 2, 2, false, opcodes::EOR };
+    cpu::CPU::instructions[0x45] = { "EOR", ZeroPage, 2, 3, false, opcodes::EOR };
+    cpu::CPU::instructions[0x55] = { "EOR", ZeroPageX, 2, 4, false, opcodes::EOR };
+    cpu::CPU::instructions[0x4D] = { "EOR", Absolute, 3, 4, false, opcodes::EOR };
+    cpu::CPU::instructions[0x5D] = { "EOR", AbsoluteX, 3, 4, false, opcodes::EOR };
+    cpu::CPU::instructions[0x59] = { "EOR", AbsoluteY, 3, 4, false, opcodes::EOR };
+    cpu::CPU::instructions[0x41] = { "EOR", IdxIndirect, 2, 6, false, opcodes::EOR };
+    cpu::CPU::instructions[0x51] = { "EOR", IndirectIdx, 2, 5, false, opcodes::EOR };
+
+    cpu::CPU::instructions[0x4C] = { "JMP", Absolute, 3, 3, true, opcodes::JMP };
+    cpu::CPU::instructions[0x6C] = { "JMP", Indirect, 3, 5, true, opcodes::JMP };
+    cpu::CPU::instructions[0x20] = { "JSR", Absolute, 3, 6, true, opcodes::JSR };
+
+    cpu::CPU::instructions[0xA9] = { "LDA", Immediate, 2, 2, false, opcodes::LDA };
+    cpu::CPU::instructions[0xA5] = { "LDA", ZeroPage, 2, 3, false, opcodes::LDA };
+    cpu::CPU::instructions[0xB5] = { "LDA", ZeroPageX, 2, 4, false, opcodes::LDA };
+    cpu::CPU::instructions[0xAD] = { "LDA", Absolute, 3, 4, false, opcodes::LDA };
+    cpu::CPU::instructions[0xBD] = { "LDA", AbsoluteX, 3, 4, false, opcodes::LDA };
+    cpu::CPU::instructions[0xB9] = { "LDA", AbsoluteY, 3, 4, false, opcodes::LDA };
+    cpu::CPU::instructions[0xA1] = { "LDA", IdxIndirect, 2, 6, false, opcodes::LDA };
+    cpu::CPU::instructions[0xB1] = { "LDA", IndirectIdx, 2, 5, false, opcodes::LDA };
+
+    cpu::CPU::instructions[0xA2] = { "LDX", Immediate, 2, 2, false, opcodes::LDX };
+    cpu::CPU::instructions[0xA6] = { "LDX", ZeroPage, 2, 3, false, opcodes::LDX };
+    cpu::CPU::instructions[0xB6] = { "LDX", ZeroPageY, 2, 4, false, opcodes::LDX };
+    cpu::CPU::instructions[0xAE] = { "LDX", Absolute, 3, 4, false, opcodes::LDX };
+    cpu::CPU::instructions[0xBE] = { "LDX", AbsoluteY, 3, 4, false, opcodes::LDX };
+
+    cpu::CPU::instructions[0xA0] = { "LDY", Immediate, 2, 2, false, opcodes::LDY };
+    cpu::CPU::instructions[0xA4] = { "LDY", ZeroPage, 2, 3, false, opcodes::LDY };
+    cpu::CPU::instructions[0xB4] = { "LDY", ZeroPageX, 2, 4, false, opcodes::LDY };
+    cpu::CPU::instructions[0xAC] = { "LDY", Absolute, 3, 4, false, opcodes::LDY };
+    cpu::CPU::instructions[0xBC] = { "LDY", AbsoluteX, 3, 4, false, opcodes::LDY };
+
+    cpu::CPU::instructions[0x4A] = { "LSR", Accumulator, 1, 2, false, opcodes::LSR };
+    cpu::CPU::instructions[0x46] = { "LSR", ZeroPage, 2, 5, false, opcodes::LSR };
+    cpu::CPU::instructions[0x56] = { "LSR", ZeroPageX, 2, 6, false, opcodes::LSR };
+    cpu::CPU::instructions[0x4E] = { "LSR", Absolute, 3, 6, false, opcodes::LSR };
+    cpu::CPU::instructions[0x5E] = { "LSR", AbsoluteX, 3, 7, false, opcodes::LSR };
+
+    cpu::CPU::instructions[0xEA] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
+
+    cpu::CPU::instructions[0x09] = { "ORA", Immediate, 2, 2, false, opcodes::ORA };
+    cpu::CPU::instructions[0x05] = { "ORA", ZeroPage, 2, 3, false, opcodes::ORA };
+    cpu::CPU::instructions[0x15] = { "ORA", ZeroPageX, 2, 4, false, opcodes::ORA };
+    cpu::CPU::instructions[0x0D] = { "ORA", Absolute, 3, 4, false, opcodes::ORA };
+    cpu::CPU::instructions[0x1D] = { "ORA", AbsoluteX, 3, 4, false, opcodes::ORA };
+    cpu::CPU::instructions[0x19] = { "ORA", AbsoluteY, 3, 4, false, opcodes::ORA };
+    cpu::CPU::instructions[0x01] = { "ORA", IdxIndirect, 2, 6, false, opcodes::ORA };
+    cpu::CPU::instructions[0x11] = { "ORA", IndirectIdx, 2, 5, false, opcodes::ORA };
+
+    cpu::CPU::instructions[0x48] = { "PHA", Implicit, 1, 3, false, opcodes::PHA };
+    cpu::CPU::instructions[0x08] = { "PHP", Implicit, 1, 3, false, opcodes::PHP };
+    cpu::CPU::instructions[0x68] = { "PLA", Implicit, 1, 4, false, opcodes::PLA };
+    cpu::CPU::instructions[0x28] = { "PLP", Implicit, 1, 4, false, opcodes::PLP };
+
+    cpu::CPU::instructions[0x2A] = { "ROL", Accumulator, 1, 2, false, opcodes::ROL };
+    cpu::CPU::instructions[0x26] = { "ROL", ZeroPage, 2, 5, false, opcodes::ROL };
+    cpu::CPU::instructions[0x36] = { "ROL", ZeroPageX, 2, 6, false, opcodes::ROL };
+    cpu::CPU::instructions[0x2E] = { "ROL", Absolute, 3, 6, false, opcodes::ROL };
+    cpu::CPU::instructions[0x3E] = { "ROL", AbsoluteX, 3, 7, false, opcodes::ROL };
+
+    cpu::CPU::instructions[0x6A] = { "ROR", Accumulator, 1, 2, false, opcodes::ROR };
+    cpu::CPU::instructions[0x66] = { "ROR", ZeroPage, 2, 5, false, opcodes::ROR };
+    cpu::CPU::instructions[0x76] = { "ROR", ZeroPageX, 2, 6, false, opcodes::ROR };
+    cpu::CPU::instructions[0x6E] = { "ROR", Absolute, 3, 6, false, opcodes::ROR };
+    cpu::CPU::instructions[0x7E] = { "ROR", AbsoluteX, 3, 7, false, opcodes::ROR };
+
+    cpu::CPU::instructions[0x40] = { "RTI", Implicit, 1, 6, true, opcodes::RTI };
+    cpu::CPU::instructions[0x60] = { "RTS", Implicit, 1, 6, true, opcodes::RTS };
+
+    cpu::CPU::instructions[0xE9] = { "SBC", Immediate, 2, 2, false, opcodes::SBC };
+    cpu::CPU::instructions[0xE5] = { "SBC", ZeroPage, 2, 3, false, opcodes::SBC };
+    cpu::CPU::instructions[0xF5] = { "SBC", ZeroPageX, 2, 4, false, opcodes::SBC };
+    cpu::CPU::instructions[0xED] = { "SBC", Absolute, 3, 4, false, opcodes::SBC };
+    cpu::CPU::instructions[0xFD] = { "SBC", AbsoluteX, 3, 4, false, opcodes::SBC };
+    cpu::CPU::instructions[0xF9] = { "SBC", AbsoluteY, 3, 4, false, opcodes::SBC };
+    cpu::CPU::instructions[0xE1] = { "SBC", IdxIndirect, 2, 6, false, opcodes::SBC };
+    cpu::CPU::instructions[0xF1] = { "SBC", IndirectIdx, 2, 5, false, opcodes::SBC };
+
+    cpu::CPU::instructions[0x38] = { "SEC", Implicit, 1, 2, false, opcodes::SEC };
+    cpu::CPU::instructions[0xF8] = { "SED", Implicit, 1, 2, false, opcodes::SED };
+    cpu::CPU::instructions[0x78] = { "SEI", Implicit, 1, 2, false, opcodes::SEI };
+
+    cpu::CPU::instructions[0x85] = { "STA", ZeroPage, 2, 2, false, opcodes::STA };
+    cpu::CPU::instructions[0x95] = { "STA", ZeroPageX, 2, 4, false, opcodes::STA };
+    cpu::CPU::instructions[0x8D] = { "STA", Absolute, 3, 4, false, opcodes::STA };
+    cpu::CPU::instructions[0x9D] = { "STA", AbsoluteX, 3, 5, false, opcodes::STA };
+    cpu::CPU::instructions[0x99] = { "STA", AbsoluteY, 3, 5, false, opcodes::STA };
+    cpu::CPU::instructions[0x81] = { "STA", IdxIndirect, 2, 6, false, opcodes::STA };
+    cpu::CPU::instructions[0x91] = { "STA", IndirectIdx, 2, 6, false, opcodes::STA };
+
+    cpu::CPU::instructions[0x86] = { "STX", ZeroPage, 2, 3, false, opcodes::STX };
+    cpu::CPU::instructions[0x96] = { "STX", ZeroPageY, 2, 4, false, opcodes::STX };
+    cpu::CPU::instructions[0x8E] = { "STX", Absolute, 3, 4, false, opcodes::STX };
+
+    cpu::CPU::instructions[0x84] = { "STY", ZeroPage, 2, 3, false, opcodes::STY };
+    cpu::CPU::instructions[0x94] = { "STY", ZeroPageY, 2, 4, false, opcodes::STY };
+    cpu::CPU::instructions[0x8C] = { "STY", Absolute, 3, 4, false, opcodes::STY };
+
+    cpu::CPU::instructions[0xAA] = { "TAX", Implicit, 1, 2, false, opcodes::TAX };
+    cpu::CPU::instructions[0xA8] = { "TAY", Implicit, 1, 2, false, opcodes::TAY };
+    cpu::CPU::instructions[0xBA] = { "TSX", Implicit, 1, 2, false, opcodes::TSX };
+    cpu::CPU::instructions[0x8A] = { "TXA", Implicit, 1, 2, false, opcodes::TXA };
+    cpu::CPU::instructions[0x9A] = { "TXS", Implicit, 1, 2, false, opcodes::TXS };
+    cpu::CPU::instructions[0x98] = { "TYA", Implicit, 1, 2, false, opcodes::TYA };
+
 }
 
 CPU* cpu::initialize()
 {
     CPU* c = new CPU();
-    cpu::populate();
+    c->populate();
 
     return c;
 }
