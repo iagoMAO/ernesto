@@ -22,6 +22,8 @@ namespace memory {
         ppu.resize(8);
         apu.resize(0x20);
         prg.resize(0x8000);
+
+        std::fill(internal.begin(), internal.end(), 0xFF);
     }
 
     void write(uint16_t addr, uint8_t data)

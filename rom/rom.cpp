@@ -16,7 +16,7 @@ namespace rom
     void testLoad()
     {
         ROM rom;
-        std::ifstream file("I:\\Projects\\hobbies\\ernesto\\rom\\nestest2.nes", std::ios::binary);
+        std::ifstream file("I:\\Projects\\hobbies\\ernesto\\rom\\lol.nes", std::ios::binary);
 
         rom.header.resize(16);
         file.read(reinterpret_cast<char*>(rom.header.data()), 16); // load first 16 bytes of rom into the header

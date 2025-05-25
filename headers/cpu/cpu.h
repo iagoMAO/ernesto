@@ -159,6 +159,16 @@ namespace cpu
 		void SED(CPU& c, CPU::addressingMode mode);
 		void CLV(CPU& c, CPU::addressingMode mode);
 
+		// Unofficial instructions
+		void LAX(CPU& c, CPU::addressingMode mode);
+		void SAX(CPU& c, CPU::addressingMode mode);
+		void DCP(CPU& c, CPU::addressingMode mode);
+		void ISC(CPU& c, CPU::addressingMode mode);
+		void RLA(CPU& c, CPU::addressingMode mode);
+		void SLO(CPU& c, CPU::addressingMode mode);
+		void SRE(CPU& c, CPU::addressingMode mode);
+		void RRA(CPU& c, CPU::addressingMode mode);
+
 		// nop
 		void NOP(CPU& c, CPU::addressingMode mode);
 	}

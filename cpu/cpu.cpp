@@ -12,13 +12,6 @@ using namespace cpu;
 
 cpu::CPU::instruction instructions[256];
 
-uint8_t A = 0; // Accumulator
-uint8_t X = 0; // Index register X
-uint8_t Y = 0; // Index register Y
-uint8_t SP = 0xFD; // Stack pointer 
-uint8_t PS = 0; // Processor status
-uint16_t PC = 0; // Program Counter
-
 // Handle different addressing modes
 uint16_t cpu::addressing::immediate(CPU& c)
 {
@@ -79,13 +72,14 @@ uint16_t cpu::addressing::indirect(CPU& c)
     uint8_t low = memory::read(c.PC + 1);
     uint8_t high = memory::read(c.PC + 2);
 
-    uint8_t ptr = (high << 8 | low);
+    uint16_t ptr = (high << 8 | low);
 
     // read the address in ptr
-    uint8_t ptrLo = memory::read(ptr);
-    uint8_t ptrHi = memory::read((ptr & 0xFF00) | ((ptr + 1) & 0x00FF)); // this replicates a bug with the 6502.
+    uint8_t ptrL = memory::read(ptr);
+    uint8_t ptrH = memory::read((ptr & 0xFF00) | ((ptr + 1) & 0x00FF));
 
-    return ((ptrHi << 8) | ptrLo);
+    uint16_t result = (ptrH << 8 | ptrL);
+    return result;
 }
 
 uint16_t cpu::addressing::indirectX(CPU& c)
@@ -625,7 +619,7 @@ void cpu::opcodes::JMP(CPU& c, CPU::addressingMode mode)
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint16_t operand = memory::read(address);
 
-    c.PC = (mode == CPU::Absolute ? address : operand);
+    c.PC = (mode == CPU::Absolute || mode == CPU::Indirect ? address : operand);
 }
 
 // JSR - Jump to subroutine
@@ -668,7 +662,7 @@ void cpu::opcodes::RTI(CPU& c, CPU::addressingMode mode)
     uint8_t ps = c.pullByte();
     uint16_t low = c.pullByte();
     uint16_t high = c.pullByte();
-    c.PC = ((high << 8) | low) + 1;
+    c.PC = ((high << 8) | low);
     c.PS = ps;
 }
 
@@ -761,6 +755,79 @@ void cpu::opcodes::NOP(CPU& c, CPU::addressingMode mode)
 {
     // Literally nothing
 }
+
+// LAX - Load A and X
+void cpu::opcodes::LAX(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    c.A = operand;
+    c.X = operand;
+    c.setFlag(CPU::Z, (operand == 0));
+    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+
+}
+
+// SAX - Store A and X
+void cpu::opcodes::SAX(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t value = c.A & c.X;
+    memory::write(address, value);
+}
+
+// DCP - Decrements the operand and compares the result to the accumulator
+void cpu::opcodes::DCP(CPU& c, CPU::addressingMode mode)
+{
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    uint8_t value = (operand - 1);
+    memory::write(address, value);
+
+    uint8_t result = c.A - value;
+
+    c.setFlag(CPU::C, (c.A >= value));
+    c.setFlag(CPU::Z, (result == 0));
+    c.setFlag(CPU::N, result & 0x80);
+}
+
+// ISC - INC + SBC
+void cpu::opcodes::ISC(CPU& c, CPU::addressingMode mode)
+{
+    INC(c, mode);
+    SBC(c, mode);
+}
+
+// RLA - ROL + AND
+void cpu::opcodes::RLA(CPU& c, CPU::addressingMode mode)
+{
+    ROL(c, mode);
+    AND(c, mode);
+}
+
+// SLO - ASL + ORA
+void cpu::opcodes::SLO(CPU& c, CPU::addressingMode mode)
+{
+    ASL(c, mode);
+    ORA(c, mode);
+}
+
+// SRE - LSR + EOR
+void cpu::opcodes::SRE(CPU& c, CPU::addressingMode mode)
+{
+    LSR(c, mode);
+    EOR(c, mode);
+}
+
+// RRA - ROR + ADC
+void cpu::opcodes::RRA(CPU& c, CPU::addressingMode mode)
+{
+    ROR(c, mode);
+    ADC(c, mode);
+}
+
 
 uint8_t& cpu::addressing::accumulator(CPU& c)
 {
@@ -916,7 +983,30 @@ void CPU::populate()
     cpu::CPU::instructions[0x4E] = { "LSR", Absolute, 3, 6, false, opcodes::LSR };
     cpu::CPU::instructions[0x5E] = { "LSR", AbsoluteX, 3, 7, false, opcodes::LSR };
 
+    cpu::CPU::instructions[0x1A] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
+    cpu::CPU::instructions[0x3A] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
+    cpu::CPU::instructions[0x5A] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
+    cpu::CPU::instructions[0x7A] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
+    cpu::CPU::instructions[0xDA] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
+    cpu::CPU::instructions[0xFA] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
     cpu::CPU::instructions[0xEA] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
+    cpu::CPU::instructions[0x80] = { "NOP", Immediate, 2, 2, false, opcodes::NOP };
+    cpu::CPU::instructions[0x04] = { "NOP", ZeroPage, 2, 3, false, opcodes::NOP };
+    cpu::CPU::instructions[0x44] = { "NOP", ZeroPageX, 2, 3, false, opcodes::NOP };
+    cpu::CPU::instructions[0x64] = { "NOP", ZeroPageX, 2, 3, false, opcodes::NOP };
+    cpu::CPU::instructions[0x14] = { "NOP", ZeroPageX, 2, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x34] = { "NOP", ZeroPageX, 2, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x54] = { "NOP", ZeroPageX, 2, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x74] = { "NOP", ZeroPageX, 2, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0xD4] = { "NOP", ZeroPageX, 2, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0xF4] = { "NOP", ZeroPageX, 2, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x0C] = { "NOP", Absolute, 3, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x1C] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x3C] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x5C] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x7C] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0xDC] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0xFC] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
 
     cpu::CPU::instructions[0x09] = { "ORA", Immediate, 2, 2, false, opcodes::ORA };
     cpu::CPU::instructions[0x05] = { "ORA", ZeroPage, 2, 3, false, opcodes::ORA };
@@ -983,11 +1073,81 @@ void CPU::populate()
     cpu::CPU::instructions[0x9A] = { "TXS", Implicit, 1, 2, false, opcodes::TXS };
     cpu::CPU::instructions[0x98] = { "TYA", Implicit, 1, 2, false, opcodes::TYA };
 
+    cpu::CPU::instructions[0xA3] = { "LAX", IdxIndirect, 2, 6, false, opcodes::LAX };
+    cpu::CPU::instructions[0xA7] = { "LAX", ZeroPage, 2, 3, false, opcodes::LAX };
+    cpu::CPU::instructions[0xB7] = { "LAX", ZeroPageY, 2, 4, false, opcodes::LAX };
+    cpu::CPU::instructions[0xAF] = { "LAX", Absolute, 3, 4, false, opcodes::LAX };
+    cpu::CPU::instructions[0xBF] = { "LAX", AbsoluteY, 3, 4, false, opcodes::LAX };
+    cpu::CPU::instructions[0xB3] = { "LAX", IndirectIdx, 2, 5, false, opcodes::LAX };
+
+    cpu::CPU::instructions[0x87] = { "SAX", ZeroPage, 2, 3, false, opcodes::SAX };
+    cpu::CPU::instructions[0x97] = { "SAX", ZeroPageY, 2, 4, false, opcodes::SAX };
+    cpu::CPU::instructions[0x8F] = { "SAX", Absolute, 3, 4, false, opcodes::SAX };
+    cpu::CPU::instructions[0x83] = { "SAX", IdxIndirect, 2, 6, false, opcodes::SAX };
+
+    cpu::CPU::instructions[0xEB] = { "USBC", Immediate, 2, 6, false, opcodes::SBC };
+
+    cpu::CPU::instructions[0xC7] = { "DCP", ZeroPage, 2, 5, false, opcodes::DCP };
+    cpu::CPU::instructions[0xD7] = { "DCP", ZeroPageX, 2, 6, false, opcodes::DCP };
+    cpu::CPU::instructions[0xCF] = { "DCP", Absolute, 3, 6, false, opcodes::DCP };
+    cpu::CPU::instructions[0xDF] = { "DCP", AbsoluteX, 3, 7, false, opcodes::DCP };
+    cpu::CPU::instructions[0xDB] = { "DCP", AbsoluteY, 3, 7, false, opcodes::DCP };
+    cpu::CPU::instructions[0xC3] = { "DCP", IdxIndirect, 2, 8, false, opcodes::DCP };
+    cpu::CPU::instructions[0xD3] = { "DCP", IndirectIdx, 2, 8, false, opcodes::DCP };
+
+    cpu::CPU::instructions[0xE7] = { "ISC", ZeroPage, 2, 5, false, opcodes::ISC };
+    cpu::CPU::instructions[0xF7] = { "ISC", ZeroPageX, 2, 6, false, opcodes::ISC };
+    cpu::CPU::instructions[0xEF] = { "ISC", Absolute, 3, 6, false, opcodes::ISC };
+    cpu::CPU::instructions[0xFF] = { "ISC", AbsoluteX, 3, 7, false, opcodes::ISC };
+    cpu::CPU::instructions[0xFB] = { "ISC", AbsoluteY, 3, 7, false, opcodes::ISC };
+    cpu::CPU::instructions[0xE3] = { "ISC", IdxIndirect, 2, 8, false, opcodes::ISC };
+    cpu::CPU::instructions[0xF3] = { "ISC", IndirectIdx, 2, 8, false, opcodes::ISC };
+
+    cpu::CPU::instructions[0x07] = { "SLO", ZeroPage, 2, 5, false, opcodes::SLO };
+    cpu::CPU::instructions[0x17] = { "SLO", ZeroPageX, 2, 6, false, opcodes::SLO };
+    cpu::CPU::instructions[0x0F] = { "SLO", Absolute, 3, 6, false, opcodes::SLO };
+    cpu::CPU::instructions[0x1F] = { "SLO", AbsoluteX, 3, 7, false, opcodes::SLO };
+    cpu::CPU::instructions[0x1B] = { "SLO", AbsoluteY, 3, 7, false, opcodes::SLO };
+    cpu::CPU::instructions[0x03] = { "SLO", IdxIndirect, 2, 8, false, opcodes::SLO };
+    cpu::CPU::instructions[0x13] = { "SLO", IndirectIdx, 2, 8, false, opcodes::SLO };
+
+    cpu::CPU::instructions[0x27] = { "RLA", ZeroPage, 2, 5, false, opcodes::RLA };
+    cpu::CPU::instructions[0x37] = { "RLA", ZeroPageX, 2, 6, false, opcodes::RLA };
+    cpu::CPU::instructions[0x2F] = { "RLA", Absolute, 3, 6, false, opcodes::RLA };
+    cpu::CPU::instructions[0x3F] = { "RLA", AbsoluteX, 3, 7, false, opcodes::RLA };
+    cpu::CPU::instructions[0x3B] = { "RLA", AbsoluteY, 3, 7, false, opcodes::RLA };
+    cpu::CPU::instructions[0x23] = { "RLA", IdxIndirect, 2, 8, false, opcodes::RLA };
+    cpu::CPU::instructions[0x33] = { "RLA", IndirectIdx, 2, 8, false, opcodes::RLA };
+
+    cpu::CPU::instructions[0x47] = { "SRE", ZeroPage, 2, 5, false, opcodes::SRE };
+    cpu::CPU::instructions[0x57] = { "SRE", ZeroPageX, 2, 6, false, opcodes::SRE };
+    cpu::CPU::instructions[0x4F] = { "SRE", Absolute, 3, 6, false, opcodes::SRE };
+    cpu::CPU::instructions[0x5F] = { "SRE", AbsoluteX, 3, 7, false, opcodes::SRE };
+    cpu::CPU::instructions[0x5B] = { "SRE", AbsoluteY, 3, 7, false, opcodes::SRE };
+    cpu::CPU::instructions[0x43] = { "SRE", IdxIndirect, 2, 8, false, opcodes::SRE };
+    cpu::CPU::instructions[0x53] = { "SRE", IndirectIdx, 2, 8, false, opcodes::SRE };
+
+    cpu::CPU::instructions[0x67] = { "RRA", ZeroPage, 2, 5, false, opcodes::RRA };
+    cpu::CPU::instructions[0x77] = { "RRA", ZeroPageX, 2, 6, false, opcodes::RRA };
+    cpu::CPU::instructions[0x6F] = { "RRA", Absolute, 3, 6, false, opcodes::RRA };
+    cpu::CPU::instructions[0x7F] = { "RRA", AbsoluteX, 3, 7, false, opcodes::RRA };
+    cpu::CPU::instructions[0x7B] = { "RRA", AbsoluteY, 3, 7, false, opcodes::RRA };
+    cpu::CPU::instructions[0x63] = { "RRA", IdxIndirect, 2, 8, false, opcodes::RRA };
+    cpu::CPU::instructions[0x73] = { "RRA", IndirectIdx, 2, 8, false, opcodes::RRA };
 }
 
 CPU* cpu::initialize()
 {
     CPU* c = new CPU();
+    c->A = 0;
+    c->X = 0;
+    c->Y = 0;
+    c->SP = 0xFD;
+    c->PS = 0;
+    c->PC = 0;
+
+    c->setFlag(CPU::I, 0x1);
+
     c->populate();
 
     return c;

@@ -26,10 +26,26 @@ int main()
 
     for (;;)
     {
-        uint8_t opcode = memory::read(c->PC);
-        const cpu::CPU::instruction& instr = c->instructions[opcode];
+        uint8_t opcode[3];
+        opcode[0] = memory::read(c->PC);
+        opcode[1] = memory::read(c->PC + 1);
+        opcode[2] = memory::read(c->PC + 2);
+        const cpu::CPU::instruction& instr = c->instructions[opcode[0]];
 
-        printf("\n[ernesto] - [PC: %04X] opcode: %02X (%s) - A: %#04x | X: %#04x | Y: %#04x | SP: %#04x | P: %#08x", c->PC, opcode, instr.name.c_str(), c->A, c->X, c->Y, c->SP, c->PS);
+        printf("%04X  %02X %02X %02X  %s  A:%02X X:%02X Y:%02X P:%02X SP:%02X\n", 
+            c->PC,
+            opcode[0],
+            opcode[1],
+            opcode[2],
+            instr.name.c_str(),
+            c->A,
+            c->X,
+            c->Y,
+            c->PS,
+            c->SP);
+
+        if (opcode[0] == 0xFF && opcode[1] == 0xFF && opcode[2] == 0xFF)
+            break;
 
         if (instr.impl)
         {
