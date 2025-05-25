@@ -12,6 +12,24 @@ using namespace cpu;
 
 cpu::CPU::instruction instructions[256];
 
+void cpu::NMI(CPU& c)
+{
+    c.pushByte((c.PC >> 8) & 0xFF); // high byte
+    c.pushByte(c.PC & 0xFF); // low byte
+
+    uint8_t ps = c.PS | 0x20;
+    ps &= ~0x10;
+    
+    c.pushByte(ps);
+
+    uint8_t nmi_lo = memory::read(0xFFFA);
+    uint8_t nmi_hi = memory::read(0xFFFB);
+
+    c.PC = (nmi_hi << 8) | nmi_lo;
+
+    c.setFlag(CPU::I, true);
+}
+
 // Handle different addressing modes
 uint16_t cpu::addressing::immediate(CPU& c)
 {
@@ -1007,6 +1025,7 @@ void CPU::populate()
     cpu::CPU::instructions[0x7C] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
     cpu::CPU::instructions[0xDC] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
     cpu::CPU::instructions[0xFC] = { "NOP", AbsoluteX, 3, 4, false, opcodes::NOP };
+    cpu::CPU::instructions[0x89] = { "NOP", Immediate, 2, 2, false, opcodes::NOP };
 
     cpu::CPU::instructions[0x09] = { "ORA", Immediate, 2, 2, false, opcodes::ORA };
     cpu::CPU::instructions[0x05] = { "ORA", ZeroPage, 2, 3, false, opcodes::ORA };
@@ -1045,6 +1064,8 @@ void CPU::populate()
     cpu::CPU::instructions[0xF9] = { "SBC", AbsoluteY, 3, 4, false, opcodes::SBC };
     cpu::CPU::instructions[0xE1] = { "SBC", IdxIndirect, 2, 6, false, opcodes::SBC };
     cpu::CPU::instructions[0xF1] = { "SBC", IndirectIdx, 2, 5, false, opcodes::SBC };
+    cpu::CPU::instructions[0xF2] = { "SBC", ZeroPage, 2, 5, false, opcodes::SBC };
+
 
     cpu::CPU::instructions[0x38] = { "SEC", Implicit, 1, 2, false, opcodes::SEC };
     cpu::CPU::instructions[0xF8] = { "SED", Implicit, 1, 2, false, opcodes::SED };

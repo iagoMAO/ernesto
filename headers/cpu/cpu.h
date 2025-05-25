@@ -173,6 +173,7 @@ namespace cpu
 		void NOP(CPU& c, CPU::addressingMode mode);
 	}
 
+	void NMI(CPU& c);
 	void populate();
 	CPU* initialize();
 }

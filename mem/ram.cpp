@@ -6,6 +6,7 @@
 */
 
 #include "../headers/mem/ram.h";
+#include "../headers/gfx/ppu.h";
 
 namespace memory {
     std::vector<uint8_t> internal(0x0800); // 2kb
@@ -31,6 +32,10 @@ namespace memory {
         // write to desired address
         if (addr < 0x2000)
             internal[addr % 0x0800] = data;
+        else if (addr >= 0x2000 && addr <= 0x2FFF)
+            ppu::nametables[addr & 0x0FFF] = data;
+        else if (addr >= 0x3F00 && addr <= 0x3F1F)
+            ppu::palette[addr & 0x1F] = data;
         else if (addr < 0x4000)
             ppu[(addr - 0x2000) % 8] = data;
         else if (addr < 0x4020)
@@ -46,7 +51,12 @@ namespace memory {
         else if (addr < 0x4000)
             return ppu[(addr - 0x2000) % 8];
         else if (addr < 0x4020)
-            return apu[addr - 0x4000];
+        {
+            if (addr == 0x4014)
+                return 0;
+            else
+                return apu[addr - 0x4000];
+        }
         else if (addr >= 0x8000)
         {
             size_t offset = addr - 0x8000;
