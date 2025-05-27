@@ -358,7 +358,7 @@ void cpu::opcodes::DEY(CPU& c, CPU::addressingMode mode)
     uint8_t result = c.Y -= 1;
     c.Y = result;
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, (result & 0x80) != 0);
 }
 
 // ASL - Arithmetic shift left
@@ -814,8 +814,23 @@ void cpu::opcodes::DCP(CPU& c, CPU::addressingMode mode)
 // ISC - INC + SBC
 void cpu::opcodes::ISC(CPU& c, CPU::addressingMode mode)
 {
-    INC(c, mode);
-    SBC(c, mode);
+    uint16_t addr = cpu::addressing::resolve(c, mode);
+    uint8_t value = memory::read(addr);
+    value += 1;
+    memory::write(addr, value);
+
+    // Effective SBC with carry
+    uint16_t borrow = c.C ? 0 : 1;
+    uint16_t result = static_cast<uint16_t>(c.A) - value - borrow;
+
+    // Update flags
+    c.setFlag(CPU::C, result < 0x100); // No borrow
+    uint8_t result8 = result & 0xFF;
+    c.setFlag(CPU::Z, result8 == 0);
+    c.setFlag(CPU::N, result8 & 0x80);
+    c.setFlag(CPU::V, ((c.A ^ result8) & (c.A ^ value)) & 0x80);
+
+    c.A = result8;
 }
 
 // RLA - ROL + AND
@@ -1001,6 +1016,9 @@ void CPU::populate()
     cpu::CPU::instructions[0x4E] = { "LSR", Absolute, 3, 6, false, opcodes::LSR };
     cpu::CPU::instructions[0x5E] = { "LSR", AbsoluteX, 3, 7, false, opcodes::LSR };
 
+    cpu::CPU::instructions[0xB2] = { "NOP", Implicit, 1, 1, false, opcodes::NOP };
+    cpu::CPU::instructions[0x2B] = { "NOP", Implicit, 1, 1, false, opcodes::NOP };
+    cpu::CPU::instructions[0x0B] = { "NOP", Implicit, 1, 1, false, opcodes::NOP };
     cpu::CPU::instructions[0x1A] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
     cpu::CPU::instructions[0x3A] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };
     cpu::CPU::instructions[0x5A] = { "NOP", Implicit, 1, 2, false, opcodes::NOP };

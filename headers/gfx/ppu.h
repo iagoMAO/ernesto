@@ -17,6 +17,16 @@ namespace ppu
     extern std::vector<uint8_t> mirror; // 3840 bytes
     extern std::vector<uint8_t> palette; // 32 bytes
 
+    extern uint8_t* ppu_ctrl; // Writable
+    extern uint8_t* ppu_mask; // Writable
+    extern uint8_t* ppu_status; // Read only
+    extern uint8_t* oam_addr; // Writable 
+    extern uint8_t* oam_data; // Writable and readable
+    extern uint16_t* ppu_scroll; // Writable 2x (16-bit)
+    extern uint16_t* ppu_addr; // Writable 2x (16-bit)
+    extern uint8_t* ppu_data; // Writable and readable
+    extern uint8_t* oam_dma; // Writable
+
     extern uint32_t framebuffer[256 * 240];
 
     extern cpu::CPU* cpu;
@@ -24,7 +34,9 @@ namespace ppu
     void tick();
     void initialize(cpu::CPU& c);
 
-    void testTile(int tileIndex, int screenX, int screenY);
+    void drawNametable(uint32_t* fb, const uint8_t* pattern_tables, const uint8_t* nametables, const uint8_t* palette);
+    void write(uint16_t addr, uint8_t value);
+    uint8_t read(uint16_t addr);
 
     extern bool frameReady;
 
