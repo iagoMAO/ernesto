@@ -113,11 +113,13 @@ uint16_t cpu::addressing::indirectX(CPU& c)
 uint16_t cpu::addressing::indirectY(CPU& c)
 {
     // target is pointer in zero page, offset by Y
-    uint16_t base = (memory::read(c.PC + 1) + c.Y) & 0xFF;
-    uint8_t low = memory::read(base);
-    uint8_t high = memory::read(base + 1) & 0xFF;
+    uint8_t zp = memory::read(c.PC + 1);
 
-    return (high << 8) | low;
+    uint8_t low = memory::read(zp);
+    uint8_t high = memory::read((zp + 1) & 0xFF);
+    uint16_t base = (high << 8) | low;
+
+    return base + c.Y;
 }
 
 int16_t cpu::addressing::relative(CPU& c)
@@ -174,7 +176,7 @@ void cpu::opcodes::LDA(CPU& c, CPU::addressingMode mode)
 
     c.A = operand;
     c.setFlag(CPU::Z, (operand == 0));
-    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (operand & 0x80)); // check last bit for sign
 }
 
 // STA - stores the content of the accumulator register into memory
@@ -192,7 +194,7 @@ void cpu::opcodes::LDX(CPU& c, CPU::addressingMode mode)
 
     c.X = operand;
     c.setFlag(CPU::Z, (operand == 0));
-    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (operand & 0x80)); // check last bit for sign
 }
 
 // STX - stores the content of the X register into memory
@@ -210,7 +212,7 @@ void cpu::opcodes::LDY(CPU& c, CPU::addressingMode mode)
 
     c.Y = operand;
     c.setFlag(CPU::Z, (operand == 0));
-    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (operand & 0x80)); // check last bit for sign
 }
 
 // STY - stores the content of the Y register into memory
@@ -226,7 +228,7 @@ void cpu::opcodes::TAX(CPU& c, CPU::addressingMode mode)
     // The addressing mode here is implied, hence no need for resolving
     c.X = c.A;
     c.setFlag(CPU::Z, (c.X == 0));
-    c.setFlag(CPU::N, (c.X && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (c.X & 0x80)); // check last bit for sign
 }
 
 // TXA - transfers A to X
@@ -235,7 +237,7 @@ void cpu::opcodes::TXA(CPU& c, CPU::addressingMode mode)
     // The addressing mode here is implied, hence no need for resolving
     c.A = c.X;
     c.setFlag(CPU::Z, (c.A == 0));
-    c.setFlag(CPU::N, (c.A && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (c.A & 0x80)); // check last bit for sign
 }
 
 // TAY - transfers Y to A
@@ -244,7 +246,7 @@ void cpu::opcodes::TAY(CPU& c, CPU::addressingMode mode)
     // The addressing mode here is implied, hence no need for resolving
     c.Y = c.A;
     c.setFlag(CPU::Z, (c.Y == 0));
-    c.setFlag(CPU::N, (c.Y && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (c.Y & 0x80)); // check last bit for sign
 }
 
 // TYA - transfers A to Y
@@ -253,7 +255,7 @@ void cpu::opcodes::TYA(CPU& c, CPU::addressingMode mode)
     // The addressing mode here is implied, hence no need for resolving
     c.A = c.Y;
     c.setFlag(CPU::Z, (c.A == 0));
-    c.setFlag(CPU::N, (c.A && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (c.A & 0x80)); // check last bit for sign
 }
 
 // ADC - Add with Carry
@@ -263,46 +265,52 @@ void cpu::opcodes::ADC(CPU& c, CPU::addressingMode mode)
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint8_t operand = memory::read(address);
 
-    uint8_t result = (c.A + memory::read(operand) + (c.C ? 1 : 0));
-    c.A = result;
+    uint8_t oldA = c.A;
+
+    uint16_t result = c.A + operand + (c.getFlag(CPU::C) ? 1 : 0);
+
+    c.A = static_cast<uint8_t>(result);
 
     c.setFlag(CPU::C, (result > 0xFF));
-    c.setFlag(CPU::Z, (result == 0));
-    c.setFlag(CPU::V, ((result ^ c.A) & (result ^ operand)) & 0x80); // check for signed overflow
-    c.setFlag(CPU::N, (result && 0x80)); // if negative
+    c.setFlag(CPU::Z, (c.A == 0));
+    c.setFlag(CPU::V, ((oldA ^ c.A) & (result ^ operand)) & 0x80); // check for signed overflow
+    c.setFlag(CPU::N, (result & 0x80)); // if negative
 }
 
 // SBC - Subtract with Carry
 void cpu::opcodes::SBC(CPU& c, CPU::addressingMode mode)
 {
-    // A = A - memory - ~C
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint8_t operand = memory::read(address);
 
-    uint8_t result = (c.A - memory::read(operand) - ~(c.C ? 1 : 0));
-    c.A = result;
+    uint8_t oldA = c.A;  // Save old A for overflow calculation
 
-    c.setFlag(CPU::C, !(result < 0x00));
-    c.setFlag(CPU::Z, (result == 0));
-    c.setFlag(CPU::V, ((result ^ c.A) & (result ^ ~operand)) & 0x80); // check for signed overflow
-    c.setFlag(CPU::N, (result && 0x80)); // if negative
+    // SBC is equivalent to: A = A + (~operand) + carry
+    // Or: A = A - operand - (1 - carry)
+    uint16_t result = c.A - operand - (c.getFlag(CPU::C) ? 0 : 1);
+
+    c.A = static_cast<uint8_t>(result);
+
+    // Carry is clear if borrow occurred (result < 0)
+    c.setFlag(CPU::C, result < 0x100);  // No borrow occurred
+    c.setFlag(CPU::Z, c.A == 0);
+    c.setFlag(CPU::V, ((oldA ^ operand) & (oldA ^ c.A)) & 0x80);
+    c.setFlag(CPU::N, c.A & 0x80);
 }
 
 // INC - Increment memory
 void cpu::opcodes::INC(CPU& c, CPU::addressingMode mode)
 {
-    // memory = memory + 1
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint8_t operand = memory::read(address);
-    
-    // write the original value first
-    memory::write(address, operand);
+    uint8_t result = operand + 1;
 
-    // now we increment
-    memory::write(address, operand + 1);
+    // Write the incremented value
+    memory::write(address, result);
 
-    c.setFlag(CPU::Z, (operand + 1) == 0);
-    c.setFlag(CPU::N, (operand + 1) && 0x80);
+    // Set flags based on the result
+    c.setFlag(CPU::Z, result == 0);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // INX - Increment X
@@ -311,7 +319,7 @@ void cpu::opcodes::INX(CPU& c, CPU::addressingMode mode)
     // x = x + 1
     c.X += 1;
     c.setFlag(CPU::Z, c.X == 0);
-    c.setFlag(CPU::N, c.X && 0x80);
+    c.setFlag(CPU::N, c.X & 0x80);
 }
 
 // INY - Increment Y
@@ -321,7 +329,7 @@ void cpu::opcodes::INY(CPU& c, CPU::addressingMode mode)
     uint8_t result = c.Y += 1;
     c.Y = result;
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // DEC - Decrement memory
@@ -338,7 +346,7 @@ void cpu::opcodes::DEC(CPU& c, CPU::addressingMode mode)
     memory::write(address, operand - 1);
 
     c.setFlag(CPU::Z, (operand - 1) == 0);
-    c.setFlag(CPU::N, (operand - 1) && 0x80);
+    c.setFlag(CPU::N, (operand - 1) & 0x80);
 }
 
 // DEX - Decrement X
@@ -348,7 +356,7 @@ void cpu::opcodes::DEX(CPU& c, CPU::addressingMode mode)
     uint8_t result = c.X -= 1;
     c.X = result;
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // DEY - Decrement Y
@@ -379,7 +387,7 @@ void cpu::opcodes::ASL(CPU& c, CPU::addressingMode mode)
 
     // set flags
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // LSR - Logical shift right
@@ -400,7 +408,7 @@ void cpu::opcodes::LSR(CPU& c, CPU::addressingMode mode)
 
     // set flags
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // ROL - Rotate Left
@@ -429,16 +437,17 @@ void cpu::opcodes::ROR(CPU& c, CPU::addressingMode mode)
     uint16_t address = cpu::addressing::resolve(c, mode);
     uint8_t operand = mode == CPU::Accumulator ? c.A : memory::read(address);
 
-    c.setFlag(CPU::C, operand & 0x01);
+    bool oldCarry = c.getFlag(CPU::C);
+    bool newCarry = operand & 0x01;
 
-    uint8_t result = (operand >> 1) | (c.getFlag(CPU::C) ? 0x80 : 0x00);
+    uint8_t result = (operand >> 1) | (oldCarry ? 0x80 : 0x00);
 
     if (mode != CPU::Accumulator)
         memory::write(address, result);
     else
         c.A = result;
 
-    c.setFlag(CPU::C, operand & 0x01);
+    c.setFlag(CPU::C, newCarry);
     c.setFlag(CPU::Z, result == 0);
     c.setFlag(CPU::N, result & 0x80);
 }
@@ -452,7 +461,7 @@ void cpu::opcodes::AND(CPU& c, CPU::addressingMode mode)
 
     c.A = result;
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // ORA - Bitwise or
@@ -464,7 +473,7 @@ void cpu::opcodes::ORA(CPU& c, CPU::addressingMode mode)
 
     c.A = result;
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // EOR - Bitwise exclusive or
@@ -476,7 +485,7 @@ void cpu::opcodes::EOR(CPU& c, CPU::addressingMode mode)
 
     c.A = result;
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // BIT - Bit test
@@ -487,8 +496,8 @@ void cpu::opcodes::BIT(CPU& c, CPU::addressingMode mode)
     uint8_t result = c.A & operand;
 
     c.setFlag(CPU::Z, result == 0);
-    c.setFlag(CPU::V, result && 0x70);
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::V, operand & 0x40);
+    c.setFlag(CPU::N, operand & 0x80);
 }
 
 // CMP - Compare A
@@ -500,7 +509,7 @@ void cpu::opcodes::CMP(CPU& c, CPU::addressingMode mode)
 
     c.setFlag(CPU::C, (c.A >= operand));
     c.setFlag(CPU::Z, (c.A == operand));
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // CPX - Compare X
@@ -512,7 +521,7 @@ void cpu::opcodes::CPX(CPU& c, CPU::addressingMode mode)
 
     c.setFlag(CPU::C, (c.X >= operand));
     c.setFlag(CPU::Z, (c.X == operand));
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // CPY - Compare Y
@@ -524,7 +533,7 @@ void cpu::opcodes::CPY(CPU& c, CPU::addressingMode mode)
 
     c.setFlag(CPU::C, (c.Y >= operand));
     c.setFlag(CPU::Z, (c.Y == operand));
-    c.setFlag(CPU::N, result && 0x80);
+    c.setFlag(CPU::N, result & 0x80);
 }
 
 // BCC - Branch if Carry Clear
@@ -681,6 +690,13 @@ void cpu::opcodes::RTI(CPU& c, CPU::addressingMode mode)
     uint16_t low = c.pullByte();
     uint16_t high = c.pullByte();
     c.PC = ((high << 8) | low);
+
+    // bit 5 is always set to 1
+    ps |= 0x20;
+
+    // bit 4 is ignored
+    ps &= ~0x10;
+
     c.PS = ps;
 }
 
@@ -709,6 +725,11 @@ void cpu::opcodes::PHP(CPU& c, CPU::addressingMode mode)
 void cpu::opcodes::PLP(CPU& c, CPU::addressingMode mode)
 {
     uint8_t ps = c.pullByte();
+    // bit 5 is always set to 1
+    ps |= (1 << 5);
+
+    // bit 4 is ignored
+    ps &= ~(1 << 4);
     c.PS = ps;
 }
 
@@ -783,7 +804,7 @@ void cpu::opcodes::LAX(CPU& c, CPU::addressingMode mode)
     c.A = operand;
     c.X = operand;
     c.setFlag(CPU::Z, (operand == 0));
-    c.setFlag(CPU::N, (operand && 0x80)); // check last bit for sign
+    c.setFlag(CPU::N, (operand & 0x80)); // check last bit for sign
 
 }
 
@@ -836,29 +857,93 @@ void cpu::opcodes::ISC(CPU& c, CPU::addressingMode mode)
 // RLA - ROL + AND
 void cpu::opcodes::RLA(CPU& c, CPU::addressingMode mode)
 {
-    ROL(c, mode);
-    AND(c, mode);
+    // rotate left first
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    bool oldCarry = c.getFlag(CPU::C);
+    bool newCarry = operand & 0x80;
+
+    uint8_t result = (operand << 1) | (oldCarry ? 1 : 0);
+
+    // write C <- 0x80 <- C to memory
+    memory::write(address, result);
+
+    // write the result of M AND A to A
+    c.A &= result;
+
+    c.setFlag(CPU::C, newCarry);
+    c.setFlag(CPU::Z, c.A == 0);
+    c.setFlag(CPU::N, c.A & 0x80);
 }
 
 // SLO - ASL + ORA
 void cpu::opcodes::SLO(CPU& c, CPU::addressingMode mode)
 {
-    ASL(c, mode);
-    ORA(c, mode);
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    // we carry the last bit of the old value for 8-bit behavior
+    c.setFlag(CPU::C, operand & 0x80);
+
+    uint8_t result = operand << 1;
+
+    // write C <- SHIFT LEFT <- 0 to M
+    memory::write(address, result);
+
+    // write the result of M OR A to A
+    c.A |= result;
+
+    // set flags
+    c.setFlag(CPU::Z, c.A == 0);
+    c.setFlag(CPU::N, c.A & 0x80);
 }
 
 // SRE - LSR + EOR
 void cpu::opcodes::SRE(CPU& c, CPU::addressingMode mode)
 {
-    LSR(c, mode);
-    EOR(c, mode);
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    // we carry the last bit of the old value for 8-bit behavior
+    c.setFlag(CPU::C, operand & 0x01);
+
+    uint8_t result = operand >> 1;
+
+    // write to memory
+    memory::write(address, result);
+
+    // write A EOR M -> A
+    c.A ^= result;
+
+    // set flags
+    c.setFlag(CPU::Z, c.A == 0);
+    c.setFlag(CPU::N, c.A & 0x80);
 }
 
 // RRA - ROR + ADC
 void cpu::opcodes::RRA(CPU& c, CPU::addressingMode mode)
 {
-    ROR(c, mode);
-    ADC(c, mode);
+    uint16_t address = cpu::addressing::resolve(c, mode);
+    uint8_t operand = memory::read(address);
+
+    bool oldCarry = c.getFlag(CPU::C);
+    bool newCarry = (operand & 0x01);
+
+    uint8_t result = (operand >> 1) | (oldCarry ? 0x80 : 0x00);
+
+    // write result to memory
+    memory::write(address, result);
+
+    uint16_t sum = c.A + result + (newCarry ? 1 : 0);
+
+    c.setFlag(CPU::C, sum > 0xFF);
+    c.setFlag(CPU::V, ((c.A ^ sum) & (result ^ sum)) & 0x80);
+
+    c.A = static_cast<uint8_t>(sum);
+
+    c.setFlag(CPU::Z, c.A == 0);
+    c.setFlag(CPU::N, c.A & 0x80);
 }
 
 

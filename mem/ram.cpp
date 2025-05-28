@@ -31,11 +31,18 @@ namespace memory {
     {
         // write to desired address
         if (addr < 0x2000)
+        {
+            if (data == 0x59 && addr == 0x00)
+            {
+                printf("hi");
+            }
             internal[addr % 0x0800] = data;
+        }
         else if ((addr >= 0x2000 && addr <= 0x3FFF))
         {
             const uint16_t reg = (addr - 0x2000) % 8;
-            ppu::write(0x2000 + reg, data);
+            // handle PPU writes
+            ppu[reg] = data;
         }
         else if (addr < 0x4020)
             apu[addr - 0x4000] = data;
@@ -48,7 +55,8 @@ namespace memory {
         if (addr < 0x2000)
             return internal[addr % 0x0800];
         else if (addr < 0x4000)
-            return ppu::read(addr);
+            // handle PPU reads
+            return ppu[(addr - 0x2000) % 8];
         else if (addr < 0x4020)
         {
             if (addr == 0x4014)

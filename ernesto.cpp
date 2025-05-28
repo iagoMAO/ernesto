@@ -71,15 +71,14 @@ int main()
     // initialize CPU
     cpu::CPU* c = cpu::initialize();
 
-    // initialize PPU
-    ppu::initialize(*c);
-
     uint8_t rvL = memory::read(0xFFFC);
     uint8_t rvH = memory::read(0xFFFD);
 
     uint16_t rv = (rvH << 8) | rvL;
 
-    c->PC = rv;
+    // c->PC = rv;
+    c->PS = 0x24;
+    c->PC = 0xC000;
 
     if (!initSDL()) return -1;
 
@@ -114,21 +113,6 @@ int main()
             c->PS,
             c->SP); */
 
-        if (ppu::frameReady)
-        {
-            void* pixels;
-            int pitch;
-            if (SDL_LockTexture(texture, NULL, &pixels, &pitch) == 0)
-            {
-                memcpy(pixels, ppu::framebuffer, SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint32_t));
-                SDL_UnlockTexture(texture);
-            }
-            else
-                printf("SDL_LockTexture failed: %s\n", SDL_GetError());
-
-            ppu::frameReady = false;
-        }
-
         ImGui_ImplSDLRenderer2_NewFrame();
         ImGui_ImplSDL2_NewFrame();
 
@@ -137,30 +121,30 @@ int main()
         ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
 
         char buf[256];
-        snprintf(buf, sizeof(buf), "%04X -  %02X %02X %02X  %s\n",
+        snprintf(buf, sizeof(buf), "%04X  %02X %02X %02X  %s %02X %02X  A: %02X X: %02X Y: %02X P: %02X SP: %02X\n",
             c->PC,
             opcode[0],
             opcode[1],
             opcode[2],
-            instr.name.c_str());
+            instr.name.c_str(),
+            opcode[1],
+            opcode[2],
+            c->A,
+            c->X,
+            c->Y,
+            c->PS,
+            c->SP);
 
         log.push_back(buf);
-        if (log.size() > 1000) log.erase(log.begin());
 
         ImGui::Begin("[ernesto] - instructions", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         
         for (const auto& line : log)
             ImGui::TextUnformatted(line.c_str());
 
-        ImGui::SetScrollHereY(1.0f);
+        // ImGui::SetScrollHereY(1.0f);
 
         ImGui::End();
-
-        static MemoryEditor pattern;
-        pattern.DrawWindow("[ernesto] - ppu patterns", ppu::pattern_tables.data(), ppu::pattern_tables.size());
-
-        static MemoryEditor nametables;
-        nametables.DrawWindow("[ernesto] - ppu nametables", ppu::nametables.data(), ppu::nametables.size());
 
         ImGui::Begin("[ernesto] - cpu", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::Text("A: %02X", c->A);
@@ -181,30 +165,30 @@ int main()
         ImGui::Text("PPU_CTRL: ");
         for (int i = 7; i >= 0; --i)
         {
-            bool bit = (*ppu::ppu_ctrl >> i) & 1;
+            bool bit = (0 >> i) & 1;
             ImGui::SameLine();
             ImGui::Text("%d", bit);
         }
         ImGui::Text("PPU_MASK: ");
         for (int i = 7; i >= 0; --i)
         {
-            bool bit = (*ppu::ppu_mask >> i) & 1;
+            bool bit = (0 >> i) & 1;
             ImGui::SameLine();
             ImGui::Text("%d", bit);
         }
         ImGui::Text("PPU_STATUS: ");
         for (int i = 7; i >= 0; --i)
         {
-            bool bit = (*ppu::ppu_status >> i) & 1;
+            bool bit = (0 >> i) & 1;
             ImGui::SameLine();
             ImGui::Text("%d", bit);
         }
-        ImGui::Text("OAM_ADDR: %02X", *ppu::oam_addr);
-        ImGui::Text("OAM_DATA: %02X", *ppu::oam_data);
-        ImGui::Text("PPU_SCROLL: %04X", *ppu::ppu_scroll);
-        ImGui::Text("PPU_ADDR: %04X", *ppu::ppu_addr);
-        ImGui::Text("PPU_DATA: %02X", *ppu::ppu_data);
-        ImGui::Text("OAM_DMA: %02X", *ppu::oam_dma);
+        ImGui::Text("OAM_ADDR: %02X", 0);
+        ImGui::Text("OAM_DATA: %02X", 0);
+        ImGui::Text("PPU_SCROLL: %04X", 0);
+        ImGui::Text("PPU_ADDR: %04X", 0);
+        ImGui::Text("PPU_DATA: %02X", 0);
+        ImGui::Text("OAM_DMA: %02X", 0);
         ImGui::End();
 
         ImGui::Begin("[ernesto] - display", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -219,15 +203,18 @@ int main()
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
 
+        uint8_t oldPc;
+
+        if (c->PC == 0xC657)
+            printf("FUCJ");
+
         if (instr.impl)
         {
+            oldPc = c->PC;
+
             int cycles = instr.cycles;
 
             instr.impl(*c, instr.mode);
-
-            // tick PPU 3 times
-            for (int i = 0; i < cycles * 3; ++i)
-                ppu::tick();
 
             if (!instr.incrementPc)
                 c->PC += instr.size;
